@@ -1,0 +1,57 @@
+setwd("D:\\Proj_Arrecadacao_Simples")
+getwd()
+
+library(forecast)
+
+simples <- read.csv2('2017-03-22 - Valor Arrecadação Simples por mês.csv')
+simples
+
+simples_ts <- ts(simples$Valor, 
+                 start = c(2008,1), frequency = 12)
+simples_ts
+
+# Fit and forecast with auto.arima()
+modelo_arima <- auto.arima(simples_ts)
+summary (modelo_arima)
+
+forecast(modelo_arima,h = 12)
+plot(forecast(modelo_arima, h=12),
+     main = "Projeção da Arrecadação do Simples",
+     xlab = "Ano",
+     ylab = "Arrecadação")
+
+par(mfrow=c(2,2))
+plot.ts(simples_ts)
+acf(simples_ts)
+pacf(simples_ts)
+plot(forecast(modelo_arima, h=15))
+
+
+### Modelo HOLT-WINTERS
+#Modelo Exponencial
+modelo_hw <- HoltWinters(simples_ts, gamma=TRUE) 
+summary(modelo_hw)
+
+pred2 <- predict(modelo_hw, n.ahead = 15)
+pred2
+
+par(mfrow=c(1,1))
+plot(forecast(modelo_hw, 15), 
+     main = "Projeção da Arrecadação do Sebrae",
+     xlab = "Ano",
+     ylab = "Arrecadação")
+
+# Comparando os dois gráficos
+par(mfrow=c(1,2))
+plot(forecast(modelo_arima, h=22),
+     main = "Modelo ARIMA",
+     xlab = "Ano",
+     ylab = "Arrecadação")
+plot(forecast(modelo_hw, 22), 
+     main = "Modelo HW",
+     xlab = "Ano",
+     ylab = "Arrecadação")
+
+summary(modelo_arima)
+HW <- forecast.HoltWinters(modelo_hw, h=12)
+accuracy(HW)
