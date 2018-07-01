@@ -1,0 +1,221 @@
+#################
+### DIRETORIO ###
+#################
+
+
+setwd("/Users/alexvlima/Documents/007-Receita-Total-do-MEI")
+# getwd()
+
+
+##################
+### BIBLIOTECA ###
+##################
+
+# install.packages(c("httr", "jsonlite","ggplot2","dplyr","psych"))
+
+library(ggplot2)
+library(dplyr)
+library(psych)
+library(httr)
+library(jsonlite)
+
+
+##################
+##### OPTIONS ####
+##################
+
+
+options(scipen = 10)
+
+
+#####################
+### BASE DE DADOS ###
+#####################
+
+
+dasn_simei <- read.csv2("DASN_SIMEI2015.csv", header = T)
+
+# Base sem aqueles que declararam receita = 0
+dasn_simei_2 <- subset(x = dasn_simei, subset = dasn_simei$rec > 0)
+
+
+##################
+### DESCRITIVO ###
+##################
+
+
+min(dasn_simei_2$rec)
+mean(dasn_simei_2$rec) / 12
+median(dasn_simei_2$rec) / 12
+
+aggregate(formula = rec ~ empregado, data = dasn_simei_2, 
+          FUN=median)
+
+aggregate(formula = rec ~ empregado, data = dasn_simei_2, 
+          FUN=mean)
+
+qtde_declaracoes <- nrow(dasn_simei)
+qtde_fat_zero <- sum(dasn_simei$rec == 0)
+
+qtde_fat_zero / qtde_declaracoes
+mean(dasn_simei_2$empregado=="S")
+
+
+##################
+### HISTOGRAMA ###
+##################
+
+ggplot(data = dasn_simei, aes(dasn_simei$rec)) +
+  geom_histogram() +
+  xlab ("Receita Total") +
+  ylab ("Frequência") +
+  ggtitle ("Histograma do Faturamento do MEI - DASN 2015") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data = dasn_simei_2, aes(dasn_simei_2$rec)) +
+  geom_histogram() +
+  xlab ("Receita Total") +
+  ylab ("Frequência") +
+  ggtitle ("Histograma do Faturamento do MEI - DASN 2015") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+##################
+##### BOXPLOT ####
+##################
+
+
+boxplot(dasn_simei_2$rec)
+
+
+fill <- "#4271AE"
+line <- "#1F3552"
+
+ggplot(dasn_simei, aes(x = empregado, y = rec)) +
+  geom_boxplot(fill = fill, colour = line) +
+  ylab("Receita") +
+  xlab("Empregado") +
+  ggtitle("Boxplot - receita total do MEI por ter empregado sim ou não") +
+  theme_bw() + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(dasn_simei_2, aes(x = empregado, y = rec)) +
+  geom_boxplot(fill = fill, colour = line) +
+  ylab("Receita") +
+  xlab("Empregado") +
+  ggtitle("Receita total do MEI por ter empregado sim ou não") +
+  theme_bw() + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+#######################
+### FUNCAO - MAPAS ####
+#######################
+
+
+mapa_uf <- function(dataset){
+  dataset %>% 
+    inner_join(shapefile_uf) %>% {
+      ggplot(.) +
+        geom_map(aes(x = long, y = lat,
+                     map_id = id, fill = media),
+                 color = 'gray30', map = ., data = .) + 
+        theme_void() +
+        coord_equal()
+    }
+}
+
+
+#######################
+### GERACAO - MAPAS ###
+#######################
+
+shapefile_uf <- read.csv2('shapefile_uf.csv')
+
+receita_mei_uf <- dasn_simei_2[,c("uf","rec")]
+
+rec_uf <- receita_mei_uf %>%
+  group_by(uf) %>%
+  summarise(mean(rec))
+
+rec_uf <- as.data.frame(rec_uf)
+# View(rec_uf)
+
+colnames(rec_uf) <- c("id","media")
+
+rec_uf %>% 
+  mapa_uf() +
+  ggtitle("Receita Anual Media do MEI por UF") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_continuous(name = "Valor em R$",low = 'light blue', high = 'blue',
+                        na.value = 'white')
+
+empregado_uf <- dasn_simei_2 %>%
+  group_by(uf) %>%
+  summarise(prop = mean(empregado=="S")*100)
+
+empregado_uf <- as.data.frame(empregado_uf)
+colnames(empregado_uf) <- c("id","media")
+
+empregado_uf %>% 
+  mapa_uf() +
+  ggtitle("Percentual de MEI com empregado por UF") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_continuous(name = "%",low = 'light blue', high = 'blue',
+                        na.value = 'white')
+
+  
+#######################
+### SECOES - CONCLA ###
+#######################
+
+# API IBGE #
+
+letras <- LETTERS[1:21]
+
+cnae_secao <- data.frame(cnae = character(0),
+                          Secao = character(0))
+
+for (i in 1:length(letras)){
+  result <- httr::GET(
+    paste0("https://servicodados.ibge.gov.br/api/v2/cnae/secoes/",letras[i],"/subclasses"))
+  parsed <- jsonlite::fromJSON(content(result, "text"), simplifyVector = TRUE)
+  temp <- as.data.frame(unique(parsed$id))
+  temp <- cbind(temp,letras[i])
+  colnames(temp) <- c("CNAE","Secao")
+  cnae_secao <- rbind(cnae_secao,temp)  
+}
+
+# nrow(cnae_secao)
+
+teste <- httr::GET("https://servicodados.ibge.gov.br/api/v2/cnae/secoes")
+parsed <- jsonlite::fromJSON(content(teste, "text"), simplifyVector = TRUE)
+# str(parsed)
+
+secao_id <- as.data.frame(parsed$id)
+secao_descr <- as.data.frame(parsed$descricao)
+
+secao <- data.frame(secao_id,secao_descr)
+colnames(secao) <- c("id","descricao")
+# View(secao)
+
+concla <- left_join(cnae_secao,secao, by = c("Secao" = "id"))
+concla$CNAE <- as.numeric(levels(concla$CNAE))
+# View(concla)
+
+# Acrescimo da variável secão da CNAE na base DASN
+dasn_simei_3 <- inner_join(dasn_simei_2, concla, by = c("cnae" = "CNAE"))
+
+faturamento_atividade <- dasn_simei_3 %>%
+  group_by(descricao) %>%
+  summarise(n = n(), media = mean(rec), mediana = median(rec)) %>%
+  arrange(desc(media))
+faturamento_atividade
+
+faturamento_cnae <- dasn_simei_3 %>%
+  group_by(cnae) %>%
+  summarise(n = n(), media = mean(rec), mediana = median(rec)) %>%
+  arrange(desc(media))
+faturamento_cnae
